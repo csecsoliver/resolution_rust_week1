@@ -1,8 +1,12 @@
 use clap::Parser;
 use clap::ValueEnum;
 use reqwest::blocking::Client;
+use reqwest::header;
+use reqwest::header::HeaderMap;
+use reqwest::header::HeaderName;
+use reqwest::header::HeaderValue;
 use serde::Deserialize;
-use std::collections::HashMap;x0
+use std::collections::HashMap;
 use std::fs;
 use std::process::exit;
 
@@ -46,7 +50,6 @@ enum RepoOptions {
     #[default]
     Repo,
     Branches,
-    Readme,
     Languages,
     Issues,
     // Commits,
@@ -94,15 +97,10 @@ struct Branch {
 }
 
 #[derive(Deserialize)]
-struct Readme {
-    content: String,
-}
-
-#[derive(Deserialize)]
 struct Issue {
     user: User,
     title: String,
-    state: bool,
+    state: String,
 }
 // #[derive(Deserialize)]
 // struct Story {
@@ -129,8 +127,21 @@ fn get_data<T: serde::de::DeserializeOwned>(url: &str, client: &Client) -> T {
 
 fn main() {
     let gh_key = fs::read_to_string(".env").unwrap_or(("").to_string());
-
-    let client = reqwest::blocking::Client::new();
+    let mut headers: HeaderMap= HeaderMap::new();
+    let token = format!("Bearer {gh_key}");
+    headers.insert(header::AUTHORIZATION, match header::HeaderValue::from_str(&token){
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Token not here idk: {e}");
+            return;
+        }
+    });
+    headers.insert("X-GitHub-Api-Version", HeaderValue::from_static("2026-03-10"));
+    let client = reqwest::blocking::Client::builder()
+        .user_agent("resolution_rust_week1_olio")
+        .default_headers(headers)
+        .build()
+        .unwrap();
     let args = Args::parse();
     let repo_name = args.repo;
     let repo_option = args.option;
@@ -139,7 +150,12 @@ fn main() {
             &format!("https://api.github.com/repos/{repo_name}"),
             &client,
         );
-        let branch_count = get_data::<Vec<Branch>>(&repo_name, &client).iter().count();
+        let branch_count = get_data::<Vec<Branch>>(
+            &format!("https://api.github.com/repos/{repo_name}/branches"),
+            &client,
+        )
+        .iter()
+        .count();
         println!("Details of repo: {}", repo_data.full_name);
         println!("Owner: {}", repo_data.owner.login);
         println!("Url: {}", repo_data.html_url);
@@ -156,7 +172,6 @@ fn main() {
         println!("Number of open Issues: {}", repo_data.open_issues);
         println!("Default branch: {}", repo_data.default_branch);
         println!("Number of branches: {}", branch_count);
-        println!("Number of open issues: {}", repo_data.open_issues);
     } else if repo_option == RepoOptions::Branches {
         let branches: Vec<Branch> = get_data(
             &format!("https://api.github.com/repos/{repo_name}/branches"),
@@ -166,13 +181,6 @@ fn main() {
         for branch in branches {
             println!("{}", branch.name);
         }
-    } else if repo_option == RepoOptions::Readme {
-        let readme: Readme = get_data(
-            &format!("https://api.github.com/repos/{repo_name}/readme"),
-            &client,
-        );
-        println!("Readme of repo {repo_name}:");
-        println!("{}", readme.content)
     } else if repo_option == RepoOptions::Languages {
         let repo_languages: HashMap<String, u64> = get_data(
             &format!("https://api.github.com/repos/{repo_name}/languages"),
@@ -187,15 +195,20 @@ fn main() {
             &format!("https://api.github.com/repos/{repo_name}/issues"),
             &client,
         );
-        print!(
+        println!(
             "{repo_name} has {} open, {} closed issues",
-            repo_issues.iter().filter(|x| x.state).count(),
-            repo_issues.iter().filter(|x| !x.state).count()
+            repo_issues.iter().filter(|x| x.state == "open").count(),
+            repo_issues.iter().filter(|x| x.state == "closed").count()
         );
-        println!("First 10 open issues' titles in repo:");
-        for issue in repo_issues.iter().filter(|y| y.state).take(10).enumerate() {
+        println!("First 10 open issues in repo:");
+        for issue in repo_issues
+            .iter()
+            .filter(|y| y.state == "open")
+            .take(10)
+            .enumerate()
+        {
             println!("{}. {}", issue.0, (*issue.1).title);
-            println!("Author: {}", (*issue.1).user.login);
+            println!("\tAuthor: {}", (*issue.1).user.login);
         }
     }
 }
