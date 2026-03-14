@@ -1,5 +1,5 @@
 [package]
-name = "hn_cli"
+name = "resolution_rust_week1"
 version = "0.1.0"
 edition = "2024"
 description = "A basic hacker-news cli made for hackclub. Not worth using"
