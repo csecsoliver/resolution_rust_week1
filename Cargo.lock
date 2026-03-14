@@ -885,7 +885,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "resolution_rust_week1"
+name = "resolution_rust_week1_olio"
 version = "0.1.0"
 dependencies = [
  "clap",
